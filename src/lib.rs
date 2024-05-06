@@ -5,8 +5,9 @@
 //!
 //! See [`StaticFiles`] for more details.
 
-use std::path::PathBuf;
+use std::{ops::Deref, path::PathBuf};
 
+use include_dir::File;
 use rocket::{
     fs::Options,
     http::{
@@ -88,10 +89,9 @@ impl StaticFiles {
 fn respond_with<'r>(
     req: &'r Request<'_>,
     path: PathBuf,
-    contents: &Dir<'r>,
+    file: &'r File<'r>,
 ) -> response::Result<'r> {
-    let response = contents.get_file(&path).ok_or(Status::NotFound)?;
-    let mut response = response.contents().respond_to(req)?;
+    let mut response = file.contents().respond_to(req)?;
     if let Some(ext) = path.extension() {
         if let Some(ct) = ContentType::from_extension(&ext.to_string_lossy()) {
             response.set_header(ct);
@@ -114,28 +114,34 @@ impl Handler for StaticFiles {
             .and_then(|segments| segments.to_path_buf(allow_dotfiles).ok());
 
         match path {
-            Some(p) if p.is_dir() => {
-                // Normalize '/a/b/foo' to '/a/b/foo/'.
-                if options.contains(Options::NormalizeDirs) && !req.uri().path().ends_with('/') {
-                    let normal = req
-                        .uri()
-                        .map_path(|p| format!("{}/", p))
-                        .expect("adding a trailing slash to a known good path => valid path")
-                        .into_owned();
+            Some(p) => {
+                if let Some(path) = self.dir.get_dir(&p) {
+                    if options.contains(Options::NormalizeDirs) && !req.uri().path().ends_with('/')
+                    {
+                        let normal = req
+                            .uri()
+                            .map_path(|p| format!("{}/", p))
+                            .expect("adding a trailing slash to a known good path => valid path")
+                            .into_owned();
 
-                    return Redirect::permanent(normal)
-                        .respond_to(req)
-                        .or_forward((data, Status::InternalServerError));
+                        return Redirect::permanent(normal)
+                            .respond_to(req)
+                            .or_forward((data, Status::InternalServerError));
+                    }
+                    if !options.contains(Options::Index) {
+                        return Outcome::forward(data, Status::NotFound);
+                    }
+                    path.get_entry("index.html")
+                        .and_then(|f| f.as_file())
+                        .ok_or(Status::NotFound)
+                        .and_then(|path| respond_with(req, p.join("index.html"), path))
+                        .or_forward((data, Status::NotFound))
+                } else if let Some(path) = self.dir.get_file(&p) {
+                    respond_with(req, p, path).or_forward((data, Status::NotFound))
+                } else {
+                    Outcome::forward(data, Status::NotFound)
                 }
-
-                if !options.contains(Options::Index) {
-                    return Outcome::forward(data, Status::NotFound);
-                }
-
-                respond_with(req, p.join("index.html"), &self.dir)
-                    .or_forward((data, Status::NotFound))
             }
-            Some(p) => respond_with(req, p, &self.dir).or_forward((data, Status::NotFound)),
             None => Outcome::forward(data, Status::NotFound),
         }
     }

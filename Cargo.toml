@@ -1,6 +1,6 @@
 [package]
 name = "rocket-include-dir"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 rust-version = "1.56"
 authors = ["Matthew Pomes <matthew.pomes@pm.me>"]
