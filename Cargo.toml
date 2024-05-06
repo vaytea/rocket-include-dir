@@ -1,7 +1,13 @@
 [package]
 name = "rocket-include-dir"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+rust-version = "1.56"
+authors = ["Matthew Pomes <matthew.pomes@pm.me>"]
+description = "Bridges include_dir and rocket, enabling Rocket to serve files directly from the binary"
+repository = "https://github.com/the10thWiz/rocket-include-dir"
+keywords = ["rocket", "web-server"]
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
