@@ -173,6 +173,8 @@ mod tests {
 
     #[test]
     fn it_works() {
+        // Move current dir to avoid checking the local filesystem for path existience
+        std::env::set_current_dir("/tmp").expect("Requires /tmp directory");
         let client = Client::tracked(launch()).expect("valid rocket instance");
         let response = client.get("/test-doesnt-exist").dispatch();
         assert_eq!(response.status(), Status::NotFound);
