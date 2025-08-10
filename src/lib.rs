@@ -120,10 +120,10 @@ impl Handler for StaticFiles {
         match path {
             Some(p) => {
                 // If the path is empty it means the root
-                let dir = if !p.as_os_str().is_empty() {
-                    self.dir.get_dir(&p)
-                } else {
+                let dir = if p.as_os_str().is_empty() {
                     Some(self.dir)
+                } else {
+                    self.dir.get_dir(&p)
                 };
                 if let Some(path) = dir {
                     if options.contains(Options::NormalizeDirs) && !req.uri().path().ends_with('/')
@@ -157,15 +157,16 @@ impl Handler for StaticFiles {
     }
 }
 
-impl Into<Route> for StaticFiles {
-    fn into(self) -> Route {
-        Route::ranked(self.rank, Method::Get, "/<path..>", self)
+impl From<StaticFiles> for Route {
+    fn from(val: StaticFiles) -> Self {
+        Route::ranked(val.rank, Method::Get, "/<path..>", val)
     }
 }
 
-impl Into<Vec<Route>> for StaticFiles {
-    fn into(self) -> Vec<Route> {
-        vec![self.into()]
+
+impl From<StaticFiles> for Vec<Route> {
+    fn from(value: StaticFiles) -> Self {
+        vec![value.into()]
     }
 }
 
