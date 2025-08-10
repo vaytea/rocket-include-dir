@@ -5,21 +5,25 @@
 //!
 //! See [`StaticFiles`] for more details.
 
-use std::{ops::Deref, path::PathBuf};
+use std::path::PathBuf;
 
 use include_dir::File;
-use rocket::{
-    fs::Options,
-    http::{
-        ext::IntoOwned,
-        uri::{fmt::Path, Segments},
-        ContentType, Method, Status,
-    },
-    outcome::IntoOutcome,
-    response::{self, Redirect, Responder},
-    route::{Handler, Outcome},
-    Data, Request, Route,
-};
+use rocket::fs::Options;
+use rocket::http::ext::IntoOwned;
+use rocket::http::uri::fmt::Path;
+use rocket::http::uri::Segments;
+use rocket::http::ContentType;
+use rocket::http::Method;
+use rocket::http::Status;
+use rocket::outcome::IntoOutcome;
+use rocket::response;
+use rocket::response::Redirect;
+use rocket::response::Responder;
+use rocket::route::Handler;
+use rocket::route::Outcome;
+use rocket::Data;
+use rocket::Request;
+use rocket::Route;
 
 pub use include_dir::include_dir;
 pub use include_dir::Dir;
@@ -115,7 +119,13 @@ impl Handler for StaticFiles {
 
         match path {
             Some(p) => {
-                if let Some(path) = self.dir.get_dir(&p) {
+                // If the path is empty it means the root
+                let dir = if !p.as_os_str().is_empty() {
+                    self.dir.get_dir(&p)
+                } else {
+                    Some(self.dir)
+                };
+                if let Some(path) = dir {
                     if options.contains(Options::NormalizeDirs) && !req.uri().path().ends_with('/')
                     {
                         let normal = req
