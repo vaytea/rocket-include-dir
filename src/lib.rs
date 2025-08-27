@@ -152,7 +152,17 @@ impl Handler for StaticFiles {
                     Outcome::forward(data, Status::NotFound)
                 }
             }
-            None => Outcome::forward(data, Status::NotFound),
+            None => {
+                if options.contains(Options::Index) {
+                    self.dir.get_entry("index.html")
+                        .and_then(|f| f.as_file())
+                        .ok_or(Status::NotFound)
+                        .and_then(|path| respond_with(req, PathBuf::from("index.html"), path))
+                        .or_forward((data, Status::NotFound))
+                } else {
+                    Outcome::forward(data, Status::NotFound)
+                }
+            }
         }
     }
 }
@@ -162,7 +172,6 @@ impl From<StaticFiles> for Route {
         Route::ranked(val.rank, Method::Get, "/<path..>", val)
     }
 }
-
 
 impl From<StaticFiles> for Vec<Route> {
     fn from(value: StaticFiles) -> Self {
@@ -179,7 +188,12 @@ mod tests {
 
     fn launch() -> Rocket<Build> {
         static PROJECT_DIR: Dir = include_dir!("static");
-        build().mount("/", StaticFiles::new(&PROJECT_DIR, Options::default()))
+        build()
+            .mount(
+                "/default",
+                StaticFiles::new(&PROJECT_DIR, Options::default()),
+            )
+            .mount("/indexed", StaticFiles::new(&PROJECT_DIR, Options::Index))
     }
 
     #[test]
@@ -187,9 +201,22 @@ mod tests {
         // Move current dir to avoid checking the local filesystem for path existience
         std::env::set_current_dir("/tmp").expect("Requires /tmp directory");
         let client = Client::tracked(launch()).expect("valid rocket instance");
-        let response = client.get("/test-doesnt-exist").dispatch();
+        let response = client.get("/default/test-doesnt-exist").dispatch();
         assert_eq!(response.status(), Status::NotFound);
-        let response = client.get("/test.txt").dispatch();
+        let response = client.get("/default/test.txt").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+    }
+
+    #[test]
+    fn index_file() {
+        // Move current dir to avoid checking the local filesystem for path existience
+        std::env::set_current_dir("/tmp").expect("Requires /tmp directory");
+        let client = Client::tracked(launch()).expect("valid rocket instance");
+        let response = client.get("/indexed/test-doesnt-exist").dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+        let response = client.get("/indexed/test.txt").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let response = client.get("/indexed/").dispatch();
         assert_eq!(response.status(), Status::Ok);
     }
 }
