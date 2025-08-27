@@ -1,9 +1,9 @@
 [package]
 name = "rocket-include-dir"
-version = "1.1.0"
+version = "1.1.2"
 edition = "2021"
 rust-version = "1.56"
-authors = ["Matthew Pomes <matthew.pomes@pm.me>"]
+authors = ["Matthew Pomes <matthew.pomes@pm.me>", "Younes Torshizi <vaytea59@gmail.com>"]
 description = "Bridges include_dir and rocket, enabling Rocket to serve files directly from the binary"
 repository = "https://github.com/the10thWiz/rocket-include-dir"
 keywords = ["rocket", "web-server"]
@@ -12,5 +12,5 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-include_dir = { version = "0.7.3", default-features = false }
-rocket = { version = "0.5.0", default-features = false }
+include_dir = { version = "0.7.4", default-features = false }
+rocket = { version = "^0.5", default-features = false }

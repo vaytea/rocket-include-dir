@@ -5,21 +5,25 @@
 //!
 //! See [`StaticFiles`] for more details.
 
-use std::{ops::Deref, path::PathBuf};
+use std::path::PathBuf;
 
 use include_dir::File;
-use rocket::{
-    fs::Options,
-    http::{
-        ext::IntoOwned,
-        uri::{fmt::Path, Segments},
-        ContentType, Method, Status,
-    },
-    outcome::IntoOutcome,
-    response::{self, Redirect, Responder},
-    route::{Handler, Outcome},
-    Data, Request, Route,
-};
+use rocket::fs::Options;
+use rocket::http::ext::IntoOwned;
+use rocket::http::uri::fmt::Path;
+use rocket::http::uri::Segments;
+use rocket::http::ContentType;
+use rocket::http::Method;
+use rocket::http::Status;
+use rocket::outcome::IntoOutcome;
+use rocket::response;
+use rocket::response::Redirect;
+use rocket::response::Responder;
+use rocket::route::Handler;
+use rocket::route::Outcome;
+use rocket::Data;
+use rocket::Request;
+use rocket::Route;
 
 pub use include_dir::include_dir;
 pub use include_dir::Dir;
@@ -115,7 +119,13 @@ impl Handler for StaticFiles {
 
         match path {
             Some(p) => {
-                if let Some(path) = self.dir.get_dir(&p) {
+                // If the path is empty it means the root
+                let dir = if p.as_os_str().is_empty() {
+                    Some(self.dir)
+                } else {
+                    self.dir.get_dir(&p)
+                };
+                if let Some(path) = dir {
                     if options.contains(Options::NormalizeDirs) && !req.uri().path().ends_with('/')
                     {
                         let normal = req
@@ -142,20 +152,30 @@ impl Handler for StaticFiles {
                     Outcome::forward(data, Status::NotFound)
                 }
             }
-            None => Outcome::forward(data, Status::NotFound),
+            None => {
+                if options.contains(Options::Index) {
+                    self.dir.get_entry("index.html")
+                        .and_then(|f| f.as_file())
+                        .ok_or(Status::NotFound)
+                        .and_then(|path| respond_with(req, PathBuf::from("index.html"), path))
+                        .or_forward((data, Status::NotFound))
+                } else {
+                    Outcome::forward(data, Status::NotFound)
+                }
+            }
         }
     }
 }
 
-impl Into<Route> for StaticFiles {
-    fn into(self) -> Route {
-        Route::ranked(self.rank, Method::Get, "/<path..>", self)
+impl From<StaticFiles> for Route {
+    fn from(val: StaticFiles) -> Self {
+        Route::ranked(val.rank, Method::Get, "/<path..>", val)
     }
 }
 
-impl Into<Vec<Route>> for StaticFiles {
-    fn into(self) -> Vec<Route> {
-        vec![self.into()]
+impl From<StaticFiles> for Vec<Route> {
+    fn from(value: StaticFiles) -> Self {
+        vec![value.into()]
     }
 }
 
@@ -168,7 +188,12 @@ mod tests {
 
     fn launch() -> Rocket<Build> {
         static PROJECT_DIR: Dir = include_dir!("static");
-        build().mount("/", StaticFiles::new(&PROJECT_DIR, Options::default()))
+        build()
+            .mount(
+                "/default",
+                StaticFiles::new(&PROJECT_DIR, Options::default()),
+            )
+            .mount("/indexed", StaticFiles::new(&PROJECT_DIR, Options::Index))
     }
 
     #[test]
@@ -176,9 +201,22 @@ mod tests {
         // Move current dir to avoid checking the local filesystem for path existience
         std::env::set_current_dir("/tmp").expect("Requires /tmp directory");
         let client = Client::tracked(launch()).expect("valid rocket instance");
-        let response = client.get("/test-doesnt-exist").dispatch();
+        let response = client.get("/default/test-doesnt-exist").dispatch();
         assert_eq!(response.status(), Status::NotFound);
-        let response = client.get("/test.txt").dispatch();
+        let response = client.get("/default/test.txt").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+    }
+
+    #[test]
+    fn index_file() {
+        // Move current dir to avoid checking the local filesystem for path existience
+        std::env::set_current_dir("/tmp").expect("Requires /tmp directory");
+        let client = Client::tracked(launch()).expect("valid rocket instance");
+        let response = client.get("/indexed/test-doesnt-exist").dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+        let response = client.get("/indexed/test.txt").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let response = client.get("/indexed/").dispatch();
         assert_eq!(response.status(), Status::Ok);
     }
 }
